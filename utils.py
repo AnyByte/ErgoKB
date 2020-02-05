@@ -6,8 +6,11 @@ from bs4 import BeautifulSoup
 import copy
 import math
 import re
+import time
 
 from consts import QWERTY, THUMBS, COORDS
+
+CACHE = {}
 
 def cleanhtml(raw_html):
     soup = BeautifulSoup(raw_html, "lxml")
@@ -20,20 +23,38 @@ def generate_strokes(sample, THUMBS, QWERTY):
     for idr, row in enumerate(QWERTY):
         for idk, key in enumerate(row):
             zones[key] = THUMBS[idr][idk]
-    strokes = []
+    strokes = {}
     stroke = ''
     for idx, char in enumerate(sample):
         current_zone = zones[char]
         stroke += char
         if idx + 1 < len(sample) and zones[sample[idx + 1]] != current_zone:
-            strokes.append({"zone": current_zone, "stroke": stroke})
+            r_stroke = stroke[::-1]
+            if stroke in strokes:
+                strokes[stroke]["count"] += 1
+            elif r_stroke in strokes:
+                strokes[r_stroke]["count"] += 1
+            else:
+                strokes[stroke] = {"zone": current_zone, "count": 1}
             stroke = ''
         if idx + 1 == len(sample):
-            strokes.append({"zone": current_zone, "stroke": stroke})
+            r_stroke = stroke[::-1]
+            if stroke in strokes:
+                strokes[stroke]["count"] += 1
+            elif r_stroke in strokes:
+                strokes[r_stroke]["count"] += 1
+            else:
+                strokes[stroke] = {"zone": current_zone, "count": 1}
     return strokes
 
-def calculateDistance(x1,y1,x2,y2):  
+def calculateDistance(x1,y1,x2,y2):
+     global CACHE
+     if f"{x1}{y1}{x2}{y2}" in CACHE:
+         return CACHE[f"{x1}{y1}{x2}{y2}"]
+     if f"{x2}{y2}{x1}{y1}" in CACHE:
+         return CACHE[f"{x2}{y2}{x1}{y1}"]
      dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)  
+     CACHE[f"{x1}{y1}{x2}{y2}"] = dist
      return dist
 
 def finger_heatmap(finger_distances):
@@ -228,10 +249,10 @@ def distance_deltas(distance, distance_1):
         print(f"{k}: {distance_1[k] / 1000:.2f} м - меньше на {delta / 1000:.2f} м ({(1 - (distance_1[k] / v)) * 100:.2f}%)")
     print(f"\nОбщая дистанция уменшилась на {sum / 1000:.2f} м")
 
-def count_stroke_distance(COORDS, QWERTY, THUMBS, default_position, default_keys, stroke):
+def count_stroke_distance(default_position, mapper, stroke):
     text = stroke["stroke"]
     zone = stroke["zone"]
-    mapper = get_mapper(COORDS, QWERTY, THUMBS)
+    count = stroke["count"]
     pairs = []
     total_distance = 0
     for idx, char in enumerate(text):
@@ -244,7 +265,6 @@ def count_stroke_distance(COORDS, QWERTY, THUMBS, default_position, default_keys
 
             distance = calculateDistance(x1, y1, x2, y2)
             total_distance += distance
-
         if idx == 0:
             x1 = default_position[mapper[char]['thumb']][0]
             y1 = default_position[mapper[char]['thumb']][1]
@@ -272,12 +292,13 @@ def count_stroke_distance(COORDS, QWERTY, THUMBS, default_position, default_keys
                 "distance": distance
             })
     return {
-        "pairs": pairs, 
+        "pairs": pairs,
+        "count": count,
         "total_distance": total_distance, 
         "zone": zone
     }
 
-def process_strokes(strokes, COORDS, QWERTY, THUMBS, default_position, default_keys):
+def process_strokes(strokes, COORDS, QWERTY, THUMBS, default_position):
     distances = {
         'ЛМ': 0, 
         'ЛБ': 0,
@@ -288,24 +309,27 @@ def process_strokes(strokes, COORDS, QWERTY, THUMBS, default_position, default_k
         'ПБ': 0,
         'ПМ': 0,
     }
+    start_time = time.time()
+    mapper = get_mapper(COORDS, QWERTY, THUMBS)
     pairs = {}
     num_workers = cpu_count()
     p = Pool(num_workers)
     manager = Manager()
-    func = partial(count_stroke_distance, COORDS, QWERTY, THUMBS, default_position, default_keys)
-    results = p.map(func, strokes)
+    func = partial(count_stroke_distance, default_position, mapper)
+    results = p.map_async(func, strokes).get()
     p.close()
     p.join()
     for stroke_distance in results:
         # stroke_distance = count_stroke_distance(COORDS, QWERTY, THUMBS, default_position, default_keys, stroke)
-        distances[stroke_distance["zone"]] += stroke_distance["total_distance"]
+        distances[stroke_distance["zone"]] += stroke_distance["total_distance"] * stroke_distance["count"]
         for pair in stroke_distance["pairs"]:
             if pair["pair"] in pairs: 
-                pairs[pair["pair"]] += pair["distance"]
+                pairs[pair["pair"]] += pair["distance"] * stroke_distance["count"]
             elif f'{pair["pair"][1]}{pair["pair"][0]}' in pairs:
-                pairs[f'{pair["pair"][1]}{pair["pair"][0]}'] += pair["distance"]
+                pairs[f'{pair["pair"][1]}{pair["pair"][0]}'] += pair["distance"] * stroke_distance["count"]
             else:
-                pairs[pair["pair"]] = pair["distance"]
+                pairs[pair["pair"]] = pair["distance"] * stroke_distance["count"]
+    print("--- %s seconds ---" % (time.time() - start_time))
     return {
         "pairs": pairs, 
         "distances": distances
