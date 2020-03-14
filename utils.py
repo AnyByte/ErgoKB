@@ -222,6 +222,8 @@ def count_stroke_distance(default_position, default_keys, mapper, stroke):
     count = stroke["count"]
     pairs = []
     total_distance = 0
+    if len(text) <= 1:
+        return
     for idx, char in enumerate(text):
         if idx + 1 == len(text):
             char_1 = char
@@ -347,6 +349,8 @@ def process_strokes(strokes, coords, qwerty):
     p.close()
     p.join()
     for stroke_distance in results:
+        if stroke_distance is None:
+            continue
         # stroke_distance = count_stroke_distance(COORDS, QWERTY, THUMBS, default_position, default_keys, stroke)
         distances[stroke_distance["zone"]] += stroke_distance["total_distance"] * stroke_distance["count"]
         for pair in stroke_distance["pairs"]:
