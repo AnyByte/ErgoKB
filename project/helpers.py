@@ -5,6 +5,7 @@ import pickle
 import re
 from collections import deque
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -43,6 +44,35 @@ def with_cache(variable_name):
     return dec
 
 
+def save_results(results):
+    now_str = datetime.now().strftime("%Y_%m_%d %H_%M_%S")
+    Path('results/').mkdir(parents=True, exist_ok=True)
+    with open(f'results/results_{now_str}.pkl', 'wb') as f:
+        pickle.dump(results, f)
+
+
+def show_results(results_file):
+    file = Path(f'results/{results_file}.pkl')
+    if not file.is_file():
+        print('Такого файла нет.')
+        return
+    with open(f'results/{results_file}.pkl', 'rb') as f:
+        results = pickle.load(f)
+    for sorted_variants in results:
+        best_variant = sorted_variants[0]
+        get_distance_map(
+            thumbs_distance=best_variant["thumbs_distance"],
+            max_distance=4369291.99691117,
+            coords=COORDS,
+            layout=best_variant["layout"],
+            title=f"ЛУЧШИЙ ВАРИАНТ",
+            subtitle=f"MAX: {best_variant['max']:.2f}\n"
+                     f"SUM: {best_variant['sum']:.2f}\n"
+                     f"AVG: {best_variant['avg']:.2f}\n"
+                     f"DELTA: {best_variant['delta']:.2f}"
+        )
+
+
 def write_cache(variable_name, data):
     Path('cache/').mkdir(parents=True, exist_ok=True)
     with open(f'cache/{variable_name}.pkl', 'wb') as f:
@@ -71,13 +101,57 @@ def two_point_distance(x1, y1, x2, y2):
     return dist
 
 
+def visualize_results(results):
+    max_x = []
+    max_y = []
+    sum_x = []
+    sum_y = []
+    avg_x = []
+    avg_y = []
+    delta_x = []
+    delta_y = []
+    score_x = []
+    score_y = []
+    fig, axs = plt.subplots(2, 2)
+    if len(results) > 1000:
+        skip_interval = 100
+    else:
+        skip_interval = 10
+    for idx, sorted_variants in enumerate(results):
+        if idx % skip_interval == 0 or idx == len(results) - 1:
+            best_variant = sorted_variants[0]
+            max_x.append(idx)
+            sum_x.append(idx)
+            avg_x.append(idx)
+            delta_x.append(idx)
+            score_x.append(idx)
+            max_y.append(best_variant['max'])
+            sum_y.append(best_variant['sum'])
+            avg_y.append(best_variant['avg'])
+            delta_y.append(best_variant['delta'])
+            score_y.append(best_variant['avg'] + best_variant['delta'])
+    axs[0, 0].plot(max_x, max_y)
+    axs[0, 0].set_title("MAX")
+    # axs[1, 0].plot(sum_x, sum_y)
+    # axs[1, 0].set_title("SUM")
+    axs[1, 0].plot(score_x, score_y)
+    axs[1, 0].set_title("SCORE")
+    axs[0, 1].plot(avg_x, avg_y)
+    axs[0, 1].set_title("AVG")
+    axs[1, 1].plot(delta_x, delta_y)
+    axs[1, 1].set_title("DELTA")
+    # axs[2, 1].plot(score_x, score_y)
+    # axs[2, 1].set_title("SCORE")
+    fig.tight_layout()
+
+
 def get_keyboard(coords, layout, draw=True, title="Координаты клавиш", subtitle=""):
     x = [i[0] for i in [item for sublist in coords for item in sublist]]
     y = [i[1] for i in [item for sublist in coords for item in sublist]]
     n = [item for sublist in layout for item in sublist]
     fig, ax = plt.subplots()
     if len(subtitle) > 0:
-        fig.subplots_adjust(top=1.1)
+        fig.subplots_adjust(top=0.98)
         fig.suptitle(title, fontsize=14, fontweight='bold')
         ax.set_title(subtitle, fontsize=10)
     else:
@@ -110,13 +184,13 @@ def layout_delta_distance(layout_a, layout_b, thumbs, coords, **kwargs):
         layout=layout_a,
         thumbs=thumbs,
         coords=coords,
-        cache_key=get_cache_key([layout_a, thumbs, coords])
+        cache_key='no-cache'  # get_cache_key([layout_a, thumbs, coords])
     )
     layout_b_mapping = get_keys_mapping(
         layout=layout_b,
         thumbs=thumbs,
         coords=coords,
-        cache_key=get_cache_key([layout_b, thumbs, coords])
+        cache_key='no-cache'  # get_cache_key([layout_b, thumbs, coords])
     )
     for key, values in layout_a_mapping.items():
         x1 = values["x"]
@@ -221,7 +295,12 @@ def get_pairs_count(dataset_sample: str, **kwargs) -> collections.Counter:
 
 @with_cache('thumbs_distance')
 def get_thumbs_distance(pairs: collections.Counter, layout: list, thumbs: list, coords: list, **kwargs):
-    key_mapping = get_keys_mapping(layout=layout, thumbs=thumbs, coords=coords, cache_key=kwargs['cache_key'])
+    key_mapping = get_keys_mapping(
+        layout=layout,
+        thumbs=thumbs,
+        coords=coords,
+        cache_key='no-cache'  # kwargs['cache_key']
+    )
     result = {}
     for pair in list(pairs):
         if key_mapping[pair[0]]["thumb"] == key_mapping[pair[1]]["thumb"]:
@@ -310,7 +389,7 @@ def test_layouts(layouts, draw_graphs=False):
             layout=layout,
             thumbs=THUMBS,
             coords=COORDS,
-            cache_key=get_cache_key([layout, THUMBS, COORDS])
+            cache_key='no-cache'  # get_cache_key([layout, THUMBS, COORDS])
         )
         distances = [
             {
@@ -367,7 +446,7 @@ def test_layouts(layouts, draw_graphs=False):
                      f"AVG: {sorted_variats[0]['avg']:.2f}\n"
                      f"DELTA: {sorted_variats[0]['delta']:.2f}"
         )
-    return sorted_variats[0]
+    return sorted_variats
 
 # get_column_layouts(QWERTY, 0)
 # get_left_row_layouts(QWERTY, 0)
