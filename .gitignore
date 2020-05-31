@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 /project/cache/
 /project/results/
+/project/exported/

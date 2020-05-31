@@ -1,0 +1,14 @@
+@startuml "Короткий алгоритм"
+skinparam monochrome true
+skinparam wrapWidth 250
+skinparam defaultTextAlignment center
+skinparam defaultFontSize 14
+skinparam noteFontSize 14
+start
+:Исходная раскладка "ЙЦУКЕН";
+repeat:Получение раскладки на вход алгоритма;
+:Алгоритм производных раскладок;
+:Алгоритм оптимизации;
+repeat while (Условие завершения алгоритма выполнено?) is (Нет) not (Да)
+stop
+@enduml

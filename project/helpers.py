@@ -1,4 +1,5 @@
 import collections
+import csv
 import hashlib
 import math
 import pickle
@@ -13,7 +14,7 @@ import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from colour import Color
-from constants import QWERTY, THUMBS, COORDS
+from constants import QWERTY, THUMBS, COORDS, MY, DIKTOR
 
 
 def shortname(layout):
@@ -71,6 +72,30 @@ def show_results(results_file):
                      f"AVG: {best_variant['avg']:.2f}\n"
                      f"DELTA: {best_variant['delta']:.2f}"
         )
+
+
+def export_results(results_file):
+    file = Path(f'results/{results_file}.pkl')
+    if not file.is_file():
+        print('Такого файла нет.')
+        return
+    with open(f'results/{results_file}.pkl', 'rb') as f:
+        results = pickle.load(f)
+    output = [["index", "max", "sum", "avg", "delta", "score"]]
+    for idx, sorted_variants in enumerate(results):
+        best_variant = sorted_variants[0]
+        output.append([
+            str(idx),
+            str(best_variant['max']).replace('.', ','),
+            str(best_variant['sum']).replace('.', ','),
+            str(best_variant['avg']).replace('.', ','),
+            str(best_variant['delta']).replace('.', ','),
+            str(best_variant['avg'] + best_variant['delta']).replace('.', ',')
+        ])
+    Path('exported/').mkdir(parents=True, exist_ok=True)
+    with open(f'exported/{results_file}.csv', 'w', newline='') as f:
+        writer = csv.writer(f, delimiter=';', quoting=csv.QUOTE_ALL)
+        writer.writerows(output)
 
 
 def write_cache(variable_name, data):
@@ -518,3 +543,28 @@ def test_layouts(layouts, draw_graphs=False):
 # print(f"Layout delta: {delta}")
 
 # iterator(QWERTY)
+
+dataset = preprocess_dataset()
+pairs = get_pairs_count(dataset)
+qwerty_thumbs_distance = get_thumbs_distance(
+    pairs=pairs,
+    layout=QWERTY,
+    thumbs=THUMBS,
+    coords=COORDS,
+    cache_key='no-cache' # get_cache_key([QWERTY, THUMBS, COORDS])
+)
+my_thumbs_distance = get_thumbs_distance(
+    pairs=pairs,
+    layout=MY,
+    thumbs=THUMBS,
+    coords=COORDS,
+    cache_key='no-cache' # get_cache_key([QWERTY, THUMBS, COORDS])
+)
+diktor_thumbs_distance = get_thumbs_distance(
+    pairs=pairs,
+    layout=DIKTOR,
+    thumbs=THUMBS,
+    coords=COORDS,
+    cache_key='no-cache' # get_cache_key([QWERTY, THUMBS, COORDS])
+)
+print('test')
